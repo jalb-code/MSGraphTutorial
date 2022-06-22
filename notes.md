@@ -16,3 +16,10 @@ https://docs.microsoft.com/fr-fr/graph/tutorials/java?tabs=aad
 - Ajouter les dépendances à Microsoft Identity (com.azure:azure-identity) et Microsoft Graph (com.microsoft.graph:microsoft-graph) dans app/build.gradle
 - Créer le fichier oAuth.properties (Voir Modèle oAuout.properties.template) et renseigner **app.clientId** et **app.authTenant**
 - Copier le code source comme indiqué dans le tutorial
+
+#### Ajout de l'authentification app-only
+
+- Suppimer l'ancienne permission User.Read + Ajouter la permission Microsoft Graph User.Read.all et Approuver cette nouvelle permission
+- Générer un code secret
+- Mettre à jour les propriétés **app.clientSecret** et **app.tenantId** du fichier oAuth.properties
+- Copier le code source comme indiqué dans le tutorial

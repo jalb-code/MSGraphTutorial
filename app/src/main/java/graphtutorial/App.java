@@ -14,6 +14,7 @@ import java.util.Scanner;
 import com.microsoft.graph.models.Message;
 import com.microsoft.graph.models.User;
 import com.microsoft.graph.requests.MessageCollectionPage;
+import com.microsoft.graph.requests.UserCollectionPage;
 
 public class App {
 
@@ -95,7 +96,7 @@ public class App {
 
     private static void initializeGraph(Properties properties) {
         try {
-            Graph.initializeGraphForUserAuth(properties, challenge -> System.out.println(challenge.getMessage()));
+            Graph.initializeGraphForUserAuth(properties, challenge -> System.out.println(challenge.getMessage()));            
         } catch (Exception e) {
             System.out.println("Error initializing Graph for user auth");
             System.out.println(e.getMessage());
@@ -129,18 +130,18 @@ public class App {
     private static void listInbox() {
         try {
             final MessageCollectionPage messages = Graph.getInbox();
-
+    
             // Output each message's details
-            for (Message message : messages.getCurrentPage()) {
+            for (Message message: messages.getCurrentPage()) {
                 System.out.println("Message: " + message.subject);
                 System.out.println("  From: " + message.from.emailAddress.name);
                 System.out.println("  Status: " + (message.isRead ? "Read" : "Unread"));
                 System.out.println("  Received: " + message.receivedDateTime
-                        // Values are returned in UTC, convert to local time zone
-                        .atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime()
-                        .format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)));
+                    // Values are returned in UTC, convert to local time zone
+                    .atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime()
+                    .format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)));
             }
-
+    
             final Boolean moreMessagesAvailable = messages.getNextPage() != null;
             System.out.println("\nMore messages available? " + moreMessagesAvailable);
         } catch (Exception e) {
@@ -154,8 +155,8 @@ public class App {
             // Send mail to the signed-in user
             // Get the user for their email address
             final User user = Graph.getUser();
-            final String email = user.mail == null ? user.userPrincipalName : user.mail;
-
+            final String email = user.mail == null ? user.userPrincipalName : user.mail;            
+            
             Graph.sendMail("Testing Microsoft Graph", "Hello world!", email);
             System.out.println("\nMail sent.");
         } catch (Exception e) {
@@ -165,7 +166,22 @@ public class App {
     }
 
     private static void listUsers() {
-        // TODO
+        try {
+            final UserCollectionPage users = Graph.getUsers();
+    
+            // Output each user's details
+            for (User user: users.getCurrentPage()) {
+                System.out.println("User: " + user.displayName);
+                System.out.println("  ID: " + user.id);
+                System.out.println("  Email: " + user.mail);
+            }
+    
+            final Boolean moreUsersAvailable = users.getNextPage() != null;
+            System.out.println("\nMore users available? " + moreUsersAvailable);
+        } catch (Exception e) {
+            System.out.println("Error getting users");
+            System.out.println(e.getMessage());
+        }
     }
 
     private static void makeGraphCall() {
