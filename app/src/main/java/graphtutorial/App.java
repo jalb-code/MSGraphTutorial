@@ -4,16 +4,17 @@
 package graphtutorial;
 
 import java.io.IOException;
-import java.time.ZoneId;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.FormatStyle;
+import java.time.format.DateTimeParseException;
 import java.util.InputMismatchException;
 import java.util.Properties;
 import java.util.Scanner;
 
-import com.microsoft.graph.models.Message;
+import com.microsoft.graph.models.Attendee;
+import com.microsoft.graph.models.Event;
 import com.microsoft.graph.models.User;
-import com.microsoft.graph.requests.MessageCollectionPage;
+import com.microsoft.graph.requests.EventCollectionPage;
 import com.microsoft.graph.requests.UserCollectionPage;
 
 public class App {
@@ -35,9 +36,7 @@ public class App {
             return;
         }
 
-        initializeGraph(oAuthProperties);
-
-        greetUser();
+        initializeGraph(oAuthProperties);     
 
         Scanner input = new Scanner(System.in);
 
@@ -45,12 +44,10 @@ public class App {
 
         while (choice != 0) {
             System.out.println("Please choose one of the following options:");
-            System.out.println("0. Exit");
-            System.out.println("1. Display access token");
-            System.out.println("2. List my inbox");
-            System.out.println("3. Send mail");
-            System.out.println("4. List users (required app-only)");
-            System.out.println("5. Make a Graph call");
+            System.out.println("0. Exit");            
+            System.out.println("1. List users (required app-only)");
+            System.out.println("2. Get Calendar Events (required app-only)");
+            System.out.println("3. Make a Graph call (Not Implemented)");
 
             try {
                 choice = input.nextInt();
@@ -65,24 +62,16 @@ public class App {
                 case 0:
                     // Exit the program
                     System.out.println("Goodbye...");
-                    break;
+                    break;                                
                 case 1:
-                    // Display access token
-                    displayAccessToken();
-                    break;
-                case 2:
-                    // List emails from user's inbox
-                    listInbox();
-                    break;
-                case 3:
-                    // Send an email message
-                    sendMail();
-                    break;
-                case 4:
                     // List users
                     listUsers();
                     break;
-                case 5:
+                case 2:
+                    // List events
+                    listEvents(input);
+                    break;
+                case 3:
                     // Run any Graph code
                     makeGraphCall();
                     break;
@@ -96,74 +85,12 @@ public class App {
 
     private static void initializeGraph(Properties properties) {
         try {
-            Graph.initializeGraphForUserAuth(properties, challenge -> System.out.println(challenge.getMessage()));            
+            Graph.initializeGraphForAppAuth(properties, challenge -> System.out.println(challenge.getMessage()));            
         } catch (Exception e) {
             System.out.println("Error initializing Graph for user auth");
             System.out.println(e.getMessage());
         }
-    }
-
-    private static void greetUser() {
-        try {
-            final User user = Graph.getUser();
-            // For Work/school accounts, email is in mail property
-            // Personal accounts, email is in userPrincipalName
-            final String email = user.mail == null ? user.userPrincipalName : user.mail;
-            System.out.println("Hello, " + user.displayName + "!");
-            System.out.println("Email: " + email);
-        } catch (Exception e) {
-            System.out.println("Error getting user");
-            System.out.println(e.getMessage());
-        }
-    }
-
-    private static void displayAccessToken() {
-        try {
-            final String accessToken = Graph.getUserToken();
-            System.out.println("Access token: " + accessToken);
-        } catch (Exception e) {
-            System.out.println("Error getting access token");
-            System.out.println(e.getMessage());
-        }
-    }
-
-    private static void listInbox() {
-        try {
-            final MessageCollectionPage messages = Graph.getInbox();
-    
-            // Output each message's details
-            for (Message message: messages.getCurrentPage()) {
-                System.out.println("Message: " + message.subject);
-                System.out.println("  From: " + message.from.emailAddress.name);
-                System.out.println("  Status: " + (message.isRead ? "Read" : "Unread"));
-                System.out.println("  Received: " + message.receivedDateTime
-                    // Values are returned in UTC, convert to local time zone
-                    .atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime()
-                    .format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)));
-            }
-    
-            final Boolean moreMessagesAvailable = messages.getNextPage() != null;
-            System.out.println("\nMore messages available? " + moreMessagesAvailable);
-        } catch (Exception e) {
-            System.out.println("Error getting inbox");
-            System.out.println(e.getMessage());
-        }
-    }
-
-    private static void sendMail() {
-        try {
-            // Send mail to the signed-in user
-            // Get the user for their email address
-            final User user = Graph.getUser();
-            final String email = user.mail == null ? user.userPrincipalName : user.mail;            
-            
-            Graph.sendMail("Testing Microsoft Graph", "Hello world!", email);
-            System.out.println("\nMail sent.");
-        } catch (Exception e) {
-            System.out.println("Error sending mail");
-            System.out.println(e.getMessage());
-        }
-    }
+    }    
 
     private static void listUsers() {
         try {
@@ -180,6 +107,61 @@ public class App {
             System.out.println("\nMore users available? " + moreUsersAvailable);
         } catch (Exception e) {
             System.out.println("Error getting users");
+            System.out.println(e.getMessage());
+        }
+    }
+
+    private static void listEvents(Scanner input) {
+        try {            
+
+            String userId = null;
+            String dateTimeStr = null;
+            LocalDateTime startDateTime = null;
+            LocalDateTime endDateTime = null;
+            
+            //Ask value for param UserID
+            System.out.print("userId ? ");                        
+            userId = input.next();            
+            input.nextLine();
+
+            //Ask value for param startDateTime              
+            do {
+                System.out.print("startDateTime (ISO 8601) ? ");          
+                dateTimeStr = input.next();
+                try{
+                    startDateTime = LocalDateTime.parse(dateTimeStr, DateTimeFormatter.ISO_DATE_TIME);
+                } catch (DateTimeParseException ex) {
+                    System.err.println("Wrong DateTime. Use format ISO 8601 (Example : 2022-06-20T00:00:00)");            
+                }
+            } while (startDateTime == null);
+
+            //Ask value for param endDateTime                      
+            do {
+                System.out.print("endDateTime (ISO 8601) ? ");  
+                dateTimeStr = input.next();
+                try{
+                    endDateTime = LocalDateTime.parse(dateTimeStr, DateTimeFormatter.ISO_DATE_TIME);
+                } catch (DateTimeParseException ex) {
+                    System.err.println("Wrong DateTime. Use format ISO 8601 (Example : 2022-06-26T23:59:59)");;            
+                }
+            } while (endDateTime == null);
+                                              
+            final EventCollectionPage events = Graph.getCalendarEvents(userId,startDateTime,endDateTime);
+            
+            for (Event event: events.getCurrentPage()) {
+              LocalDateTime startDateTimeEv = LocalDateTime.parse(event.start.dateTime,DateTimeFormatter.ISO_DATE_TIME);
+              LocalDateTime endDateTimeEv = LocalDateTime.parse(event.end.dateTime,DateTimeFormatter.ISO_DATE_TIME);
+              System.out.println("Event " + event.subject + " from " + startDateTimeEv.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) + " to " + endDateTimeEv.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+              for (Attendee attendee : event.attendees) {
+                System.out.println("\t - Attendee : " + attendee.emailAddress.name + " (" + attendee.emailAddress.address + ")");
+              }              
+            }
+
+            final Boolean moreEventsAvailable = events.getNextPage() != null;
+            System.out.println("\nMore events available? " + moreEventsAvailable);
+
+        } catch (Exception e) {
+            System.out.println("Error getting events");
             System.out.println(e.getMessage());
         }
     }

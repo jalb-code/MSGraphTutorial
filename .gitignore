@@ -11,3 +11,5 @@ app/src/main/resources/graphtutorial/oAuth.properties
 
 ### Java ###
 *.class
+
+Info tenant.txt
