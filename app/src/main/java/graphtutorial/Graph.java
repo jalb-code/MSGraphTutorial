@@ -1,27 +1,24 @@
 package graphtutorial;
 
-import java.util.Arrays;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 import java.util.function.Consumer;
 
 import com.azure.core.credential.AccessToken;
 import com.azure.core.credential.TokenRequestContext;
+import com.azure.identity.ClientCertificateCredential;
 import com.azure.identity.ClientSecretCredential;
 import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.identity.DeviceCodeCredential;
-import com.azure.identity.DeviceCodeCredentialBuilder;
 import com.azure.identity.DeviceCodeInfo;
 import com.microsoft.graph.authentication.TokenCredentialAuthProvider;
-import com.microsoft.graph.models.BodyType;
-import com.microsoft.graph.models.EmailAddress;
-import com.microsoft.graph.models.ItemBody;
-import com.microsoft.graph.models.Message;
-import com.microsoft.graph.models.Recipient;
-import com.microsoft.graph.models.User;
-import com.microsoft.graph.models.UserSendMailParameterSet;
+import com.microsoft.graph.options.Option;
+import com.microsoft.graph.options.QueryOption;
+import com.microsoft.graph.requests.EventCollectionPage;
 import com.microsoft.graph.requests.GraphServiceClient;
-import com.microsoft.graph.requests.MessageCollectionPage;
 import com.microsoft.graph.requests.UserCollectionPage;
 
 import okhttp3.Request;
@@ -30,12 +27,11 @@ public class Graph {
 
     private static Properties _properties;
     private static DeviceCodeCredential _deviceCodeCredential;
-    private static GraphServiceClient<Request> _userClient;
 
-    private static ClientSecretCredential _clientSecretCredential;
+    private static ClientSecretCredential _clientSecretCredential;    
     private static GraphServiceClient<Request> _appClient;
 
-    public static void initializeGraphForUserAuth(Properties properties, Consumer<DeviceCodeInfo> challenge)
+    public static void initializeGraphForAppAuth(Properties properties, Consumer<DeviceCodeInfo> challenge)
             throws Exception {
         // Ensure properties isn't null
         if (properties == null) {
@@ -44,23 +40,27 @@ public class Graph {
 
         _properties = properties;
 
-        final String clientId = properties.getProperty("app.clientId");
-        final String authTenantId = properties.getProperty("app.authTenant");
-        final List<String> graphUserScopes = Arrays
-                .asList(properties.getProperty("app.graphUserScopes").split(","));
+        if (_clientSecretCredential == null) {
+            final String clientId = _properties.getProperty("app.clientId");
+            final String tenantId = _properties.getProperty("app.tenantId");
+            final String clientSecret = _properties.getProperty("app.clientSecret");
+            
+            _clientSecretCredential = new ClientSecretCredentialBuilder()
+                    .clientId(clientId)
+                    .tenantId(tenantId)                    
+                    .clientSecret(clientSecret)
+                    .build();
+            
+        }
 
-        _deviceCodeCredential = new DeviceCodeCredentialBuilder()
-                .clientId(clientId)
-                .tenantId(authTenantId)
-                .challengeConsumer(challenge)
-                .build();
+        if (_appClient == null) {
+            final TokenCredentialAuthProvider authProvider = new TokenCredentialAuthProvider(
+                    List.of("https://graph.microsoft.com/.default"), _clientSecretCredential);
 
-        final TokenCredentialAuthProvider authProvider = new TokenCredentialAuthProvider(graphUserScopes,
-                _deviceCodeCredential);
-
-        _userClient = GraphServiceClient.builder()
-                .authenticationProvider(authProvider)
-                .buildClient();
+            _appClient = GraphServiceClient.builder()
+                    .authenticationProvider(authProvider)
+                    .buildClient();
+        }
     }
 
     public static String getUserToken() throws Exception {
@@ -68,108 +68,44 @@ public class Graph {
         if (_deviceCodeCredential == null) {
             throw new Exception("Graph has not been initialized for user auth");
         }
-    
+
         final String[] graphUserScopes = _properties.getProperty("app.graphUserScopes").split(",");
-    
+
         final TokenRequestContext context = new TokenRequestContext();
         context.addScopes(graphUserScopes);
-    
+
         final AccessToken token = _deviceCodeCredential.getToken(context).block();
         return token.getToken();
     }
 
-    public static User getUser() throws Exception {
-        // Ensure client isn't null
-        if (_userClient == null) {
-            throw new Exception("Graph has not been initialized for user auth");
-        }
-    
-        return _userClient.me()
-            .buildRequest()
-            .select("displayName,mail,userPrincipalName")
-            .get();
-    }
-
-    public static MessageCollectionPage getInbox() throws Exception {
-        // Ensure client isn't null
-        if (_userClient == null) {
-            throw new Exception("Graph has not been initialized for user auth");
-        }
-    
-        return _userClient.me()
-            .mailFolders("inbox")
-            .messages()
-            .buildRequest()
-            .select("from,isRead,receivedDateTime,subject")
-            .top(25)
-            .orderBy("receivedDateTime DESC")
-            .get();
-    }
-
-    public static void sendMail(String subject, String body, String recipient) throws Exception {
-        // Ensure client isn't null
-        if (_userClient == null) {
-            throw new Exception("Graph has not been initialized for user auth");
-        }
-    
-        // Create a new message
-        final Message message = new Message();
-        message.subject = subject;
-        message.body = new ItemBody();
-        message.body.content = body;
-        message.body.contentType = BodyType.TEXT;
-    
-        final Recipient toRecipient = new Recipient();
-        toRecipient.emailAddress = new EmailAddress();
-        toRecipient.emailAddress.address = recipient;
-        message.toRecipients = List.of(toRecipient);
-    
-        // Send the message
-        _userClient.me()
-            .sendMail(UserSendMailParameterSet.newBuilder()
-                .withMessage(message)
-                .build())
-            .buildRequest()
-            .post();
-    }
-
-    private static void ensureGraphForAppOnlyAuth() throws Exception {
-        // Ensure _properties isn't null
-        if (_properties == null) {
-            throw new Exception("Properties cannot be null");
-        }
-    
-        if (_clientSecretCredential == null) {
-            final String clientId = _properties.getProperty("app.clientId");
-            final String tenantId = _properties.getProperty("app.tenantId");
-            final String clientSecret = _properties.getProperty("app.clientSecret");
-    
-            _clientSecretCredential = new ClientSecretCredentialBuilder()
-                .clientId(clientId)
-                .tenantId(tenantId)
-                .clientSecret(clientSecret)
-                .build();
-        }
-    
-        if (_appClient == null) {
-            final TokenCredentialAuthProvider authProvider =
-                new TokenCredentialAuthProvider(
-                    List.of("https://graph.microsoft.com/.default"), _clientSecretCredential);
-    
-            _appClient = GraphServiceClient.builder()
-                .authenticationProvider(authProvider)
-                .buildClient();
-        }
-    }
-
     public static UserCollectionPage getUsers() throws Exception {
-        ensureGraphForAppOnlyAuth();
-    
+        // Ensure client isn't null
+        if (_appClient == null) {
+            throw new Exception("Graph has not been initialized for app auth");
+        }
+
         return _appClient.users()
-            .buildRequest()
-            .select("displayName,id,mail")
-            .top(25)
-            .orderBy("displayName")
-            .get();
+                .buildRequest()
+                .select("displayName,id,mail")
+                .top(25)
+                .orderBy("displayName")
+                .get();
+    }
+
+    public static EventCollectionPage getCalendarEvents(String userId, LocalDateTime startDate, LocalDateTime endDate) throws Exception {
+        // Ensure client isn't null
+        if (_appClient == null) {
+            throw new Exception("Graph has not been initialized for app auth");
+        }
+
+        LinkedList<Option> requestOptions = new LinkedList<Option>();
+        requestOptions.add(new QueryOption("startDateTime", DateTimeFormatter.ISO_DATE_TIME.format(startDate)));
+        requestOptions.add(new QueryOption("endDateTime", DateTimeFormatter.ISO_DATE_TIME.format(endDate)));
+
+        return _appClient.users(userId)
+                .calendar()
+                .calendarView()
+                .buildRequest(requestOptions)
+                .get();                
     }
 }
